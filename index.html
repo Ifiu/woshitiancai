@@ -136,6 +136,18 @@
   .msg.user .meta { justify-content: flex-end; margin: 0 4px 4px 0; }
   .msg-actions { display: flex; gap: 10px; margin-top: 4px; padding: 0 4px; }
   .msg-actions button { border: none; background: none; color: var(--ink-soft); font-size: 11px; font-weight: 700; cursor: pointer; padding: 2px; }
+  /* ---- 状态卡片 / 记忆栏：与正文分离的独立块（不继承 .bubble 的背景与阴影） ---- */
+  .msg.assistant > .card {
+    border: 3px solid var(--ink); border-radius: 12px; padding: 8px 10px; margin: 5px 0;
+    font-size: 12px; font-weight: 700; line-height: 1.7;
+    word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
+  }
+  .msg.assistant > .card-status { background: var(--accent); box-shadow: -3px 3px 0 rgba(51,37,63,.85); }
+  .card-status::before { content: "◈ 当前状态"; display: block; font-size: 11px; font-weight: 800; color: rgba(51,37,63,.6); margin-bottom: 3px; }
+  .msg.assistant > .card-memo { background: var(--paper); border-left-width: 8px; border-left-color: var(--primary); box-shadow: -3px 3px 0 rgba(51,37,63,.85); }
+  .card-memo::before { content: "◈ 记忆"; display: block; font-size: 11px; font-weight: 800; color: var(--ink-soft); margin-bottom: 3px; }
+  .card-memo ul { margin: 0; padding-left: 18px; }
+  .card-memo li { margin: 2px 0; }
   .streaming .bubble::after { content: "\258D"; color: var(--primary); animation: blink .8s infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
@@ -429,11 +441,26 @@ function seedStore() {
       "",
       "【队员关系】朱志鑫和苏新皓是最早认识开始训练的两人。经常朱志鑫犯傻张泽禹调侃，两人相处很舒适。朱志鑫张极互相开玩笑百无禁忌。朱志鑫左航都是重庆人有共同话题帅哥惺惺相惜。张极张泽禹两个人小时候都是从外地送来的有很多共鸣。张泽禹左航两向导聪明人有共同语言。张泽禹苏新皓过去训练时有些矛盾但现在已经和好，两人因事业心产生共鸣。张极左航单独相处的时候有莫名的暧昧氛围张极直进左航会躲闪。苏新皓像家长一样宠着张极。左航苏新皓两个人待在一起像开了净化一样特别和谐，像闺蜜？虽然外界有诸多揣测，但五个人其实关系非常黏糊。"
     ].join("\n"),
-    characters: [c1, c2, c3, c4, c5], scene: [c1.id, c2.id, c3.id, c4.id, c5.id], messages: []
+    characters: [c1, c2, c3, c4, c5], scene: [c1.id, c2.id, c3.id, c4.id, c5.id], messages: [],
+    sceneState: "", memory: ""
   };
   store = { v: 1, settings: { apiBase: "https://api.deepseek.com/v1", apiKey: "sk-00363d8684c64740b9ae3e29b40e8378", model: "deepseek-chat" }, currentWorldId: w.id, worlds: {} };
   store.worlds[w.id] = w;
   saveStore();
+}
+function normalizeWorld(w) {
+  if (!w || typeof w !== "object") return w;
+  if (!Array.isArray(w.characters)) w.characters = [];
+  if (!Array.isArray(w.scene)) w.scene = [];
+  if (!Array.isArray(w.messages)) w.messages = [];
+  if (typeof w.sceneState !== "string") w.sceneState = "";
+  if (typeof w.memory !== "string") w.memory = "";
+  return w;
+}
+function normalizeStore(s) {
+  if (!s || typeof s !== "object" || !s.worlds) return s;
+  Object.keys(s.worlds).forEach(function (k) { normalizeWorld(s.worlds[k]); });
+  return s;
 }
 function ensureStore() {
   try {
@@ -442,6 +469,8 @@ function ensureStore() {
   } catch (e) { store = null; }
   if (!store || typeof store !== "object" || !store.worlds || !store.currentWorldId || !store.worlds[store.currentWorldId]) {
     seedStore();
+  } else {
+    normalizeStore(store);
   }
 }
 function curWorld() { return store.worlds[store.currentWorldId]; }
@@ -490,11 +519,73 @@ function sanitizeHtml(html) {
 }
 function looksLikeHtml(text) { return /<\/?[a-zA-Z][^>]*>/.test(text); }
 
+/* ================= AI 三段式分块（状态 / 正文 / 记忆） ================= */
+/* 标记必须独占一行才生效，因此不会撞到正文里的【角色名】。 */
+const BLOCK_RE = /^\s*【(状态|正文|记忆)】\s*$/;
+function splitAiBlocks(text) {
+  const src = String(text == null ? "" : text);
+  const buf = { status: [], body: [], memo: [] };
+  let cur = "body", found = false;
+  src.split(/\r?\n/).forEach(function (line) {
+    const m = line.match(BLOCK_RE);
+    if (m) {
+      cur = m[1] === "状态" ? "status" : (m[1] === "记忆" ? "memo" : "body");
+      found = true;
+      return;
+    }
+    buf[cur].push(line);
+  });
+  if (!found) return { status: "", body: src.trim(), memo: "" }; // 无标记（旧记录/单段回复）→ 全部当正文
+  return {
+    status: buf.status.join("\n").trim(),
+    body: buf.body.join("\n").trim(),
+    memo: buf.memo.join("\n").trim()
+  };
+}
+/* 构造独立卡片节点。状态卡与记忆栏一律走 textContent，天然免疫 HTML 注入。 */
+function cardEl(cls, text) {
+  const el = document.createElement("div");
+  el.className = "card " + cls;
+  if (cls === "card-memo") {
+    const ul = document.createElement("ul");
+    text.split(/\r?\n/)
+      .map(function (s) { return s.replace(/^[\s·•\-*]+/, "").trim(); })
+      .filter(Boolean)
+      .forEach(function (t) {
+        const li = document.createElement("li");
+        li.textContent = t;
+        ul.appendChild(li);
+      });
+    if (ul.childNodes.length) el.appendChild(ul); else el.textContent = text;
+  } else {
+    el.textContent = text;
+  }
+  return el;
+}
+
 /* ================= Prompt 组装（design D4） ================= */
 /* 【美化提示词粘贴处】把后续整理好的美化/排版格式要求，粘贴在下面两个反引号之间。
    内容非空时会作为【美化格式】一节追加到系统提示词末尾；留空则不加该节。
    注意：粘贴的内容里不要包含反引号 ` 或 ${ 字符。 */
-const BEAUTIFY_PROMPT = ``;
+const BEAUTIFY_PROMPT = `每轮回复必须严格按下面的三段式排版，顺序不可调换，三段之间各空一行：
+
+【状态】
+时间：（月日 时:分） ｜ 地点：（具体到房间或路段） ｜ 天气：（天气 + 温度 + 体感细节） ｜ 在场：（角色名，用「、」分隔）
+
+【正文】
+（正文内容：剧本式对话与叙述，可包含 HTML 片段）
+
+【记忆】
+· （本轮新增的关键事实，每条不超过 25 字）
+
+排版硬性要求：
+1. 「【状态】」「【正文】」「【记忆】」三个标题必须原样输出、各自独占一行，不得改写、不得省略、不得调换顺序。
+2. 【状态】和【记忆】内禁止出现任何 HTML 标签与内联样式，只能是纯文本；HTML 片段只允许出现在【正文】里。
+3. 【状态】固定写四项：时间、地点、天气、在场，用「｜」分隔，不加额外说明。时间必须承接系统提示词中【当前场景状态】的时间并向前流动，不得倒退、不得停滞；天气要写到体感细节。
+4. 在场必须与系统提示词【出场角色】清单核对：凡当前身处同一场景的出场角色，即使本轮没有说话、没有动作，也必须全部列出；已离场角色不得写入在场；不得遗漏，也不得凭想象增列。输出前先逐一点名核对一遍。
+5. 【记忆】以系统提示词中【记忆区】的既有条目为基础：仍然有效、仍然影响当下的原样搬运（不得删除、不得改写）；已失效或被推翻的删除；再追加本轮新增。全条不超过 8 条，每条以「· 」开头。
+6. 【正文】里不要再重复【状态】中的时间、地点与天气。
+7. 禁止 Markdown 语法。三段合计约 1500 字，以【正文】为主体。`;
 
 function buildSystemPrompt(w, pov) {
   const sceneChars = w.scene.map(id => charById(w, id)).filter(Boolean);
@@ -522,6 +613,12 @@ ${charBlock}
 
 【叙事视角】
 ${povInst}
+
+【当前场景状态】
+${(w.sceneState && w.sceneState.trim()) ? (w.sceneState.trim() + "\n（以上是截至上一轮的场景状态，时间必须在此基础上继续向前流动，不得倒退、不得停滞。）") : "（对话尚未开始。请在第一轮自行设定合理的时间、地点、天气与在场角色。）"}
+
+【记忆区】
+${(w.memory && w.memory.trim()) ? (w.memory.trim() + "\n（以上是已确认的既有事实：不得遗忘、不得篡改、不得与后文矛盾。每轮回复都必须在【记忆】中把它们原样继承下来。）") : "（暂无记忆条目。请在【记忆】中建立最初的记忆。）"}
 
 【发话权】
 - 只有上述出场角色可以行动或说话。已离场角色视作不在场：不发言、不行动、不突然出现、不被主动提起（用户明确要求时除外）。
@@ -587,7 +684,13 @@ function buildMessages(w, pov) {
   const history = w.messages
     .filter(m => (m.role === "user" || m.role === "assistant") && m.content && m.content.trim())
     .slice(-HISTORY_LIMIT)
-    .map(m => ({ role: m.role, content: m.content }));
+    .map(function (m) {
+      // AI 历史只回传正文：状态与记忆由系统提示词的【当前场景状态】【记忆区】承载，
+      // 避免同一份内容重复占 token，也避免已被推翻的旧记忆干扰当前生成。
+      const content = (m.role === "assistant") ? splitAiBlocks(m.content).body : m.content;
+      return { role: m.role, content: content };
+    })
+    .filter(m => m.content && m.content.trim());
   return [{ role: "system", content: buildSystemPrompt(w, pov) }].concat(history);
 }
 
@@ -679,6 +782,12 @@ async function generateReply(pov) {
   } else if (stopped) {
     toast("已停止，保留已生成内容");
   }
+  // 状态与记忆持久化：只在拿到对应片段时更新，避免中途停止把已有记忆冲空
+  if (w.messages.some(function (m) { return m.id === aiMsg.id; })) {
+    const blk = splitAiBlocks(aiMsg.content);
+    if (blk.status) w.sceneState = blk.status;
+    if (blk.memo) w.memory = blk.memo;
+  }
   streamState = null;
   setStreaming(false);
   saveStore();
@@ -725,8 +834,11 @@ function deleteMessage(id) {
 }
 function clearChat() {
   if (streamState) return;
-  if (!confirm("确定清空当前世界观的全部对话吗？其他世界观不受影响。")) return;
-  curWorld().messages = [];
+  if (!confirm("确定清空当前世界观的全部对话吗？对话、场景状态与记忆都会一并清空，其他世界观不受影响。")) return;
+  const cw = curWorld();
+  cw.messages = [];
+  cw.sceneState = "";
+  cw.memory = "";
   saveStore();
   renderMessages();
 }
@@ -817,8 +929,9 @@ function renderMessages() {
     return;
   }
   w.messages.forEach(function (m, i) {
+    const isStreaming = !!(streamState && streamState.msgId === m.id);
     const wrap = document.createElement("div");
-    wrap.className = "msg " + m.role + (streamState && streamState.msgId === m.id ? " streaming" : "");
+    wrap.className = "msg " + m.role + (isStreaming ? " streaming" : "");
     wrap.dataset.mid = m.id;
 
     const meta = document.createElement("div");
@@ -826,16 +939,25 @@ function renderMessages() {
     meta.textContent = m.role === "user" ? "导演指令" : povLabel(w, m.pov);
     wrap.appendChild(meta);
 
+    // AI 回复切成三块：状态卡 / 正文 / 记忆栏；用户消息与流式阶段不切。
+    const blk = (m.role === "assistant" && !isStreaming)
+      ? splitAiBlocks(m.content)
+      : { status: "", body: m.content, memo: "" };
+
+    if (blk.status) wrap.appendChild(cardEl("card-status", blk.status));
+
     const bubble = document.createElement("div");
     bubble.className = "bubble";
-    if (streamState && streamState.msgId === m.id) {
+    if (isStreaming) {
       bubble.textContent = m.content; // 流式阶段纯文本
-    } else if (m.role === "assistant" && looksLikeHtml(m.content)) {
-      bubble.innerHTML = sanitizeHtml(m.content); // 富渲染（消毒后）
+    } else if (m.role === "assistant" && looksLikeHtml(blk.body)) {
+      bubble.innerHTML = sanitizeHtml(blk.body); // 富渲染（消毒后，仅正文）
     } else {
-      bubble.textContent = m.content;
+      bubble.textContent = blk.body;
     }
     wrap.appendChild(bubble);
+
+    if (blk.memo) wrap.appendChild(cardEl("card-memo", blk.memo));
 
     const actions = document.createElement("div");
     actions.className = "msg-actions";
@@ -856,12 +978,30 @@ function renderMessages() {
 }
 
 function updateStreamingBubble(m) {
-  const el = document.querySelector('.msg[data-mid="' + m.id + '"] .bubble');
-  if (el) {
-    el.textContent = m.content;
-    const chat = $("#chat");
-    chat.scrollTop = chat.scrollHeight;
-  }
+  const wrap = document.querySelector('.msg[data-mid="' + m.id + '"]');
+  if (!wrap) return;
+  const blk = splitAiBlocks(m.content);
+
+  const bubble = wrap.querySelector(".bubble");
+  if (bubble) bubble.textContent = blk.body; // 流式阶段正文仍走纯文本，避免标签未闭合闪烁
+
+  // 状态卡：实时出现与更新
+  let st = wrap.querySelector(".card-status");
+  if (blk.status) {
+    if (st) st.textContent = blk.status;
+    else wrap.insertBefore(cardEl("card-status", blk.status), bubble || null);
+  } else if (st) st.remove();
+
+  // 记忆栏：实时出现与更新
+  let memo = wrap.querySelector(".card-memo");
+  if (blk.memo) {
+    const fresh = cardEl("card-memo", blk.memo);
+    if (memo) wrap.replaceChild(fresh, memo);
+    else wrap.insertBefore(fresh, wrap.querySelector(".msg-actions"));
+  } else if (memo) memo.remove();
+
+  const chat = $("#chat");
+  chat.scrollTop = chat.scrollHeight;
 }
 
 /* ---- 舞台区（立绘占位） ---- */
@@ -998,7 +1138,8 @@ function renderWorldList() {
     nm.textContent = (w.id === store.currentWorldId ? "✓ " : "") + w.name;
     const sub = document.createElement("div");
     sub.className = "sub";
-    sub.textContent = w.characters.length + " 个角色 · " + w.messages.length + " 条对话";
+    sub.textContent = w.characters.length + " 个角色 · " + w.messages.length + " 条对话 · "
+      + (w.memory ? w.memory.split(/\r?\n/).filter(function (s) { return s.trim(); }).length : 0) + " 条记忆";
     grow.appendChild(nm); grow.appendChild(sub);
     grow.style.cursor = "pointer";
     grow.onclick = function () { switchWorld(w.id); };
@@ -1027,7 +1168,7 @@ function saveWorldForm() {
     const w = store.worlds[editingWorldId];
     w.name = name; w.setting = setting;
   } else {
-    const w = { id: uid(), name: name, setting: setting, characters: [], scene: [], messages: [] };
+    const w = { id: uid(), name: name, setting: setting, characters: [], scene: [], messages: [], sceneState: "", memory: "" };
     store.worlds[w.id] = w;
     store.currentWorldId = w.id;
   }
@@ -1053,7 +1194,7 @@ function deleteWorld(id) {
     if (rest.length) {
       store.currentWorldId = rest[0];
     } else {
-      const fresh = { id: uid(), name: "新世界观", setting: "", characters: [], scene: [], messages: [] };
+      const fresh = { id: uid(), name: "新世界观", setting: "", characters: [], scene: [], messages: [], sceneState: "", memory: "" };
       store.worlds[fresh.id] = fresh;
       store.currentWorldId = fresh.id;
     }
@@ -1182,6 +1323,7 @@ function importJson(file) {
       }
       if (!confirm("导入将覆盖当前全部数据，确定吗？")) return;
       if (!data.settings) data.settings = { apiBase: "", apiKey: "", model: "" };
+      normalizeStore(data); // 旧备份缺少 sceneState / memory 时补齐
       store = data;
       saveStore();
       renderAll();
