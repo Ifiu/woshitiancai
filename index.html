@@ -145,8 +145,14 @@
   .msg.assistant > .card-status { background: var(--accent); box-shadow: -3px 3px 0 rgba(51,37,63,.85); }
   .card-status::before { content: "◈ 当前状态"; display: block; font-size: 11px; font-weight: 800; color: rgba(51,37,63,.6); margin-bottom: 3px; }
   .msg.assistant > .card-memo { background: var(--paper); border-left-width: 8px; border-left-color: var(--primary); box-shadow: -3px 3px 0 rgba(51,37,63,.85); }
-  .card-memo::before { content: "◈ 记忆"; display: block; font-size: 11px; font-weight: 800; color: var(--ink-soft); margin-bottom: 3px; }
-  .card-memo ul { margin: 0; padding-left: 18px; }
+  /* 记忆栏折叠：头部可点击，折叠状态存 localStorage，避免重建 DOM 后弹回 */
+  .card-memo .memo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; user-select: none; }
+  .card-memo .memo-head .title { font-size: 11px; font-weight: 800; color: var(--ink-soft); }
+  .card-memo .memo-head .tg { font-size: 10px; font-weight: 700; color: var(--ink-soft); opacity: .75; white-space: nowrap; }
+  .card-memo.collapsed .tg::after { content: "▸ 展开"; }
+  .card-memo:not(.collapsed) .tg::after { content: "▾ 收起"; }
+  .card-memo.collapsed ul { display: none; }
+  .card-memo ul { margin: 3px 0 0; padding-left: 18px; }
   .card-memo li { margin: 2px 0; }
   .streaming .bubble::after { content: "\258D"; color: var(--primary); animation: blink .8s infinite; }
   @keyframes blink { 50% { opacity: 0; } }
@@ -363,7 +369,7 @@
 "use strict";
 /* ================= 常量 ================= */
 const LS_KEY = "cp-rp-store";
-const GEN_PARAMS = { temperature: 0.9, top_p: 0.95, max_tokens: 2048 }; // D8 固定参数
+const GEN_PARAMS = { temperature: 0.9, top_p: 0.95, max_tokens: 3072 }; // D8 固定参数
 const HISTORY_LIMIT = 20;
 const STREAM_IDLE_TIMEOUT = 30000;
 
@@ -542,21 +548,54 @@ function splitAiBlocks(text) {
     memo: buf.memo.join("\n").trim()
   };
 }
-/* 构造独立卡片节点。状态卡与记忆栏一律走 textContent，天然免疫 HTML 注入。 */
+/* ---- 记忆栏折叠偏好（跨消息记忆，防止流式重建 DOM 时被弹回） ----
+   默认折叠（记忆一长就不占版面）；用户手动展开过就一直记住展开。 */
+const MEMO_PREF_KEY = "cp-rp-memo-collapsed";
+let memoCollapsed = true;
+(function () {
+  try { memoCollapsed = localStorage.getItem(MEMO_PREF_KEY) !== "0"; } catch (e) {}
+})();
+function setMemoCollapsed(v) {
+  memoCollapsed = !!v;
+  try { localStorage.setItem(MEMO_PREF_KEY, memoCollapsed ? "1" : "0"); } catch (e) {}
+}
+
+/* 构造独立卡片节点。状态卡与记忆栏一律走 textContent，天然免疫 HTML 注入。
+   记忆栏额外带一个可点击头部，用于展开 / 收起。 */
 function cardEl(cls, text) {
   const el = document.createElement("div");
   el.className = "card " + cls;
   if (cls === "card-memo") {
-    const ul = document.createElement("ul");
-    text.split(/\r?\n/)
+    const items = text.split(/\r?\n/)
       .map(function (s) { return s.replace(/^[\s·•\-*]+/, "").trim(); })
-      .filter(Boolean)
-      .forEach(function (t) {
-        const li = document.createElement("li");
-        li.textContent = t;
-        ul.appendChild(li);
-      });
-    if (ul.childNodes.length) el.appendChild(ul); else el.textContent = text;
+      .filter(Boolean);
+    if (!items.length) { el.textContent = text; return el; }
+
+    const head = document.createElement("div");
+    head.className = "memo-head";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = "◈ 记忆（" + items.length + "）";
+    const tg = document.createElement("span");
+    tg.className = "tg";
+    head.appendChild(title);
+    head.appendChild(tg);
+    head.onclick = function (e) {
+      e.stopPropagation();
+      const next = !el.classList.contains("collapsed");
+      el.classList.toggle("collapsed", next);
+      setMemoCollapsed(next);
+    };
+    el.appendChild(head);
+
+    const ul = document.createElement("ul");
+    items.forEach(function (t) {
+      const li = document.createElement("li");
+      li.textContent = t;
+      ul.appendChild(li);
+    });
+    el.appendChild(ul);
+    if (memoCollapsed) el.classList.add("collapsed");
   } else {
     el.textContent = text;
   }
@@ -570,7 +609,7 @@ function cardEl(cls, text) {
 const BEAUTIFY_PROMPT = `每轮回复必须严格按下面的三段式排版，顺序不可调换，三段之间各空一行：
 
 【状态】
-时间：（月日 时:分） ｜ 地点：（具体到房间或路段） ｜ 天气：（天气 + 温度 + 体感细节） ｜ 在场：（角色名，用「、」分隔）
+时间：（月日 时:分，如 9月17日 23:40） ｜ 地点：（具体到房间或路段） ｜ 天气：（天气 + 温度 + 体感细节） ｜ 在场：（角色名，用「、」分隔）
 
 【正文】
 （正文内容：剧本式对话与叙述，可包含 HTML 片段）
@@ -580,12 +619,44 @@ const BEAUTIFY_PROMPT = `每轮回复必须严格按下面的三段式排版，�
 
 排版硬性要求：
 1. 「【状态】」「【正文】」「【记忆】」三个标题必须原样输出、各自独占一行，不得改写、不得省略、不得调换顺序。
-2. 【状态】和【记忆】内禁止出现任何 HTML 标签与内联样式，只能是纯文本；HTML 片段只允许出现在【正文】里。
-3. 【状态】固定写四项：时间、地点、天气、在场，用「｜」分隔，不加额外说明。时间必须承接系统提示词中【当前场景状态】的时间并向前流动，不得倒退、不得停滞；天气要写到体感细节。
-4. 在场必须与系统提示词【出场角色】清单核对：凡当前身处同一场景的出场角色，即使本轮没有说话、没有动作，也必须全部列出；已离场角色不得写入在场；不得遗漏，也不得凭想象增列。输出前先逐一点名核对一遍。
-5. 【记忆】以系统提示词中【记忆区】的既有条目为基础：仍然有效、仍然影响当下的原样搬运（不得删除、不得改写）；已失效或被推翻的删除；再追加本轮新增。全条不超过 8 条，每条以「· 」开头。
-6. 【正文】里不要再重复【状态】中的时间、地点与天气。
-7. 禁止 Markdown 语法。三段合计约 1500 字，以【正文】为主体。`;
+2. 上面示例中括号内的文字只是占位说明，必须替换为当前剧情的真实内容；严禁照抄示例中的文字。
+3. 【状态】和【记忆】内禁止出现任何 HTML 标签与内联样式，只能是纯文本；HTML 片段只允许出现在【正文】里。
+4. 【状态】固定写四项：时间、地点、天气、在场，用「｜」分隔，不加额外说明。时间必须承接系统提示词中【当前场景状态】的时间并向前流动，不得倒退、不得停滞；天气要写到体感细节。
+5. 在场必须与系统提示词【出场角色】清单核对：凡当前身处同一场景的出场角色都必须列出，即使本轮没有说话、没有动作也要写上；已离场角色不得写入在场；不得遗漏，也不得凭想象增列。输出【状态】前先逐一点名核对一遍。
+6. 【记忆】以系统提示词中【记忆区】的既有条目为基础：仍然有效、仍然影响当下的原样搬运（不得删除、不得改写）；已失效或被推翻的删除；再追加本轮新增。全条不超过 6 条，每条以「· 」开头。
+7. 【正文】里不要再重复【状态】中的时间、地点与天气。
+8. 禁止 Markdown 语法。三段合计约 1500 字，以【正文】为主体。`;
+
+/* 【文风提示词粘贴处】把文风要求粘贴在下面两个反引号之间。
+   内容非空时会作为【文风要求】一节追加到系统提示词末尾；留空则不加该节。
+   注意：粘贴的内容里不要包含反引号 ` 或 ${ 字符。
+   下面这版整合自 skill「去AI味-文风集合套件」，已改写为「生成期版」：
+   剔除了模块七（三级修改流程，属人类改稿流程，流式生成无法回改）、
+   模块路由表、references 索引与审计信息，并把「章末钩子」转译为「每轮结尾」。 */
+const STYLE_PROMPT = `【文风核心】
+不解释，只呈现——作者退场，镜头在场。读者能从动作和对话里推断出来的信息，一律不写。
+
+1. 可拍摄原则：任何描写都必须能被摄像机拍下来。拍不下来的评价、感受、氛围总结，
+   一律改写成动作 / 对话 / 环境细节，而不是删掉——删掉会丢信息。
+2. 禁用四类 AI 指纹词，命中即翻译（不得只删，也不得换同义词）：
+   ① 程度副词与模糊限定：突然觉得、那一刻、仿佛、显然
+   ② 情绪标签：心中一紧、百感交集
+   ③ 修饰套话：夕阳的余晖洒在、空气中弥漫着
+   ④ 总结收尾：命运的齿轮开始转动
+3. 情绪一律动作化：不写「他很紧张」，写「他把烟叼反了，滤嘴烧出一股焦味。他没换。」
+   优先用反常动作——反常动作同时承载情绪与剧情。对话内人物自述情绪豁免。
+4. 每句对话必须至少承担一项：交代关键信息 / 暴露人物性格 / 制造或化解冲突。
+   三项全否就删掉。对话标签极简，多数不加「他说」，用动作节拍替代。
+5. 冲突写刀口：跳过情绪酝酿，直接写谁让步、谁甩出关键信息、谁转身离开。信息量比音量重要。
+6. 不宣告情绪与结论：不写「他扬眉吐气了」「这说明他在意他」。
+   分量来自外部可观察的事实反转——对方的脸色、旁人的态度、物件的位移。
+7. 每轮结尾悬置不闭合：最后一行落在一个「做一半」的动作上，让一个未回答的问题悬在上面。
+   禁止抒情、总结、预告。
+8. 人性最重的时刻写到物理动作为止，停笔。零道德评语、零心理解读——
+   一旦「告知」，读者就从目击者降级为被告知者。
+
+基调边界：以上是「冷峻极简」规则。本世界观为写实日常正剧、角色关系黏糊，允许温情与温度；
+只在需要冷处理的段落收紧，不要全篇冷硬化。`;
 
 function buildSystemPrompt(w, pov) {
   const sceneChars = w.scene.map(id => charById(w, id)).filter(Boolean);
@@ -660,7 +731,7 @@ ${(w.memory && w.memory.trim()) ? (w.memory.trim() + "\n（以上是已确认的
 5. 不得替用户总结前文、不得请示确认、不得问"你想怎么发展"、不得输出任何元信息或写作说明。
 
 【篇幅】
-每轮约 1500 字，聚焦当下这一刻；群像场景可稍长，但不写流水账。
+每轮约 1000 字，聚焦当下这一刻；群像场景可稍长，但不写流水账。
 
 【富元素】
 剧情需要时可直接输出 HTML 片段呈现手机聊天界面、回忆卡片、系统/旁白提示、信件、公告等。只允许这些标签：
@@ -678,6 +749,8 @@ HTML 之外的内容保持纯文本。
 整体基调与上述世界观保持一致；世界观未明确基调时，默认克制写实的日常正剧基调，不强行煽情。`;
   const beautify = BEAUTIFY_PROMPT.trim();
   if (beautify) prompt += "\n\n【美化格式】\n" + beautify;
+  const style = STYLE_PROMPT.trim();
+  if (style) prompt += "\n\n【文风要求】\n" + style;
   return prompt;
 }
 function buildMessages(w, pov) {
