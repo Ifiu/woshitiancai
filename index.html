@@ -110,6 +110,11 @@
   .standee.entering { animation: standeeIn .28s ease-out; }
   @keyframes standeeOut { to { transform: translateY(30px) scale(.7); opacity: 0; } }
   .standee.leaving { animation: standeeOut .25s ease-in forwards; }
+  @keyframes standeePulse { 50% { box-shadow: 4px 0 0 rgba(51,37,63,.35), 0 0 0 6px var(--pov-accent), 0 0 18px rgba(51,37,63,.4); } }
+  .standee.pulse { animation: standeePulse .5s ease-in-out 2; }
+  /* 角色名标签：状态卡在场栏与正文【角色名】里的可点击名字，颜色取角色主题色 */
+  .nametag { font-weight: 800; cursor: pointer; }
+  .nametag:hover { text-decoration: underline; }
 
   #chat {
     flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px;
@@ -560,9 +565,10 @@ function setMemoCollapsed(v) {
   try { localStorage.setItem(MEMO_PREF_KEY, memoCollapsed ? "1" : "0"); } catch (e) {}
 }
 
-/* 构造独立卡片节点。状态卡与记忆栏一律走 textContent，天然免疫 HTML 注入。
+/* 构造独立卡片节点。卡片内容只由文本节点与我们自己创建的 span 组成，天然免疫 HTML 注入。
+   状态卡会把已知角色名渲染成可点击的上色 nametag（plain=true 时退回纯文本，供流式阶段用）；
    记忆栏额外带一个可点击头部，用于展开 / 收起。 */
-function cardEl(cls, text) {
+function cardEl(cls, text, plain) {
   const el = document.createElement("div");
   el.className = "card " + cls;
   if (cls === "card-memo") {
@@ -596,10 +602,89 @@ function cardEl(cls, text) {
     });
     el.appendChild(ul);
     if (memoCollapsed) el.classList.add("collapsed");
+  } else if (cls === "card-status" && !plain) {
+    appendLinkedText(el, text, curWorld(), false); // 在场名字上色，点击定位立绘
   } else {
     el.textContent = text;
   }
   return el;
+}
+
+/* ================= 角色名关联（状态卡 / 正文 → 立绘舞台） ================= */
+function reEscape(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+/* 已知角色名按长度降序拼成正则片段，避免短名抢占长名；无角色时返回 null */
+function charNamePattern(w) {
+  const names = w.characters.map(function (c) { return c.name; }).filter(Boolean)
+    .sort(function (a, b) { return b.length - a.length; })
+    .map(reEscape);
+  return names.length ? names.join("|") : null;
+}
+/* 点击名字：舞台滚动到对应立绘并脉冲高亮；该角色当前不在场（含正在离场动画中）则提示 */
+function pulseStandee(c) {
+  const el = document.querySelector('#stage .standee[data-cid="' + c.id + '"]:not(.leaving)');
+  if (!el) { toast("「" + c.name + "」当前不在场"); return; }
+  el.scrollIntoView({ behavior: reduceMotionMQ.matches ? "auto" : "smooth", inline: "center", block: "nearest" });
+  el.classList.remove("pulse");
+  void el.offsetWidth;
+  el.classList.add("pulse");
+  setTimeout(function () { el.classList.remove("pulse"); }, 1100);
+}
+/* 把一段纯文本追加到 el，其中的已知角色名包成可点击的上色 nametag。
+   bracketed=true 只处理【名字】形式（正文说话标记），否则处理所有出现的名字（状态卡在场栏）。 */
+function appendLinkedText(el, text, w, bracketed) {
+  const pat = charNamePattern(w);
+  if (!pat) { el.appendChild(document.createTextNode(text)); return; }
+  const re = new RegExp(bracketed ? "【(?:" + pat + ")】" : pat, "g");
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+    const name = bracketed ? m[0].slice(1, -1) : m[0];
+    const c = w.characters.find(function (x) { return x.name === name; });
+    const sp = document.createElement("span");
+    sp.className = "nametag";
+    sp.style.color = charColor(c);
+    sp.textContent = m[0];
+    sp.title = "定位立绘";
+    sp.onclick = (function (cc) { return function (e) { e.stopPropagation(); pulseStandee(cc); }; })(c);
+    el.appendChild(sp);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+}
+/* 正文里的【角色名】说话标记 → nametag。遍历既有 DOM 的文本节点，HTML 富渲染与纯文本两种正文都适用。 */
+function linkifySpeakers(rootEl, w) {
+  const pat = charNamePattern(w);
+  if (!pat) return;
+  const re = new RegExp("【(?:" + pat + ")】");
+  const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+  const targets = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.nodeValue && re.test(node.nodeValue)) targets.push(node);
+  }
+  targets.forEach(function (tn) {
+    const frag = document.createDocumentFragment();
+    appendLinkedText(frag, tn.nodeValue, w, true);
+    tn.parentNode.replaceChild(frag, tn);
+  });
+}
+/* 状态卡「在场」栏 → w.scene：剧情驱动的进出场回传到立绘舞台。
+   保守策略：在场栏里一个已知角色都没解析到时视为噪音，不改动舞台。 */
+function parsePresenceNames(statusText) {
+  const m = /在场\s*[:：]\s*([^\n｜|]*)/.exec(statusText || "");
+  if (!m) return null;
+  return m[1].split(/[、,，\/\s]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+}
+function syncSceneFromStatus(w, statusText) {
+  const names = parsePresenceNames(statusText);
+  if (!names) return false;
+  const nameSet = {};
+  names.forEach(function (n) { nameSet[n] = true; });
+  const next = w.characters.filter(function (c) { return nameSet[c.name]; }).map(function (c) { return c.id; });
+  if (!next.length) return false;
+  if (next.length === w.scene.length && next.every(function (id) { return w.scene.indexOf(id) >= 0; })) return false;
+  w.scene = next;
+  return true;
 }
 
 /* ================= Prompt 组装（design D4） ================= */
@@ -622,7 +707,7 @@ const BEAUTIFY_PROMPT = `每轮回复必须严格按下面的三段式排版，�
 2. 上面示例中括号内的文字只是占位说明，必须替换为当前剧情的真实内容；严禁照抄示例中的文字。
 3. 【状态】和【记忆】内禁止出现任何 HTML 标签与内联样式，只能是纯文本；HTML 片段只允许出现在【正文】里。
 4. 【状态】固定写四项：时间、地点、天气、在场，用「｜」分隔，不加额外说明。时间必须承接系统提示词中【当前场景状态】的时间并向前流动，不得倒退、不得停滞；天气要写到体感细节。
-5. 在场必须与系统提示词【出场角色】清单核对：凡当前身处同一场景的出场角色都必须列出，即使本轮没有说话、没有动作也要写上；已离场角色不得写入在场；不得遗漏，也不得凭想象增列。输出【状态】前先逐一点名核对一遍。
+5. 在场如实填写此刻身处同一场景的角色，且必须与本轮正文实际演到的一致：凡在场的出场角色都要列出，即使本轮没有说话、没有动作；剧情中有人离开场景时，正文要交代其离开，在场栏同步去掉此人；有人进入场景时同样先交代再加入。界面顶部的立绘舞台会依据本栏自动同步出场阵容。已离场角色不得写入在场，不得遗漏在场者，也不得凭想象增列未登场的角色。输出【状态】前先逐一点名核对一遍。
 6. 【记忆】以系统提示词中【记忆区】的既有条目为基础：仍然有效、仍然影响当下的原样搬运（不得删除、不得改写）；已失效或被推翻的删除；再追加本轮新增。全条不超过 6 条，每条以「· 」开头。
 7. 【正文】里不要再重复【状态】中的时间、地点与天气。
 8. 禁止 Markdown 语法。三段合计约 1500 字，以【正文】为主体。`;
@@ -666,6 +751,7 @@ function buildSystemPrompt(w, pov) {
   if (offSceneChars.length) {
     charBlock += "\n已离场角色（此刻不在场：不发言、不行动、不突然出现、不被主动提起，用户明确要求时除外）：" + offSceneChars.map(c => c.name).join("、");
   }
+  charBlock += "\n（出场阵容可随剧情变化：角色在剧情中离开或进入场景时，在【状态】的在场栏如实更新，界面顶部的立绘舞台会自动跟随本栏同步。）";
   let povInst;
   if (pov === "god") {
     povInst = "当前为上帝（全知）视角：以第三人称叙述所有出场角色的言行，可适当描写各角色的内心，也可描写环境与氛围。";
@@ -856,14 +942,19 @@ async function generateReply(pov) {
     toast("已停止，保留已生成内容");
   }
   // 状态与记忆持久化：只在拿到对应片段时更新，避免中途停止把已有记忆冲空
+  let sceneSynced = false;
   if (w.messages.some(function (m) { return m.id === aiMsg.id; })) {
     const blk = splitAiBlocks(aiMsg.content);
-    if (blk.status) w.sceneState = blk.status;
+    if (blk.status) {
+      w.sceneState = blk.status;
+      sceneSynced = syncSceneFromStatus(w, blk.status); // 在场栏驱动立绘舞台进出场
+    }
     if (blk.memo) w.memory = blk.memo;
   }
   streamState = null;
   setStreaming(false);
   saveStore();
+  if (sceneSynced) { renderSceneBar(); renderPovSelect(); }
   renderMessages();
 }
 
@@ -1028,6 +1119,8 @@ function renderMessages() {
     } else {
       bubble.textContent = blk.body;
     }
+    // 正文里的【角色名】染色并关联立绘（流式阶段不处理，结束后统一走这里）
+    if (m.role === "assistant" && !isStreaming) linkifySpeakers(bubble, w);
     wrap.appendChild(bubble);
 
     if (blk.memo) wrap.appendChild(cardEl("card-memo", blk.memo));
@@ -1058,11 +1151,11 @@ function updateStreamingBubble(m) {
   const bubble = wrap.querySelector(".bubble");
   if (bubble) bubble.textContent = blk.body; // 流式阶段正文仍走纯文本，避免标签未闭合闪烁
 
-  // 状态卡：实时出现与更新
+  // 状态卡：实时出现与更新（流式阶段保持纯文本，结束后由 renderMessages 统一染色）
   let st = wrap.querySelector(".card-status");
   if (blk.status) {
     if (st) st.textContent = blk.status;
-    else wrap.insertBefore(cardEl("card-status", blk.status), bubble || null);
+    else wrap.insertBefore(cardEl("card-status", blk.status, true), bubble || null);
   } else if (st) st.remove();
 
   // 记忆栏：实时出现与更新
