@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>嗑 CP 小剧场</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  :root {
+    --ink: #33253f;
+    --ink-soft: #7a6390;
+    --paper: #fff7e6;
+    --paper-2: #fffdf6;
+    --page-bg: #70d6c5;
+    --primary: #ff5d8f;
+    --primary-deep: #d63a6d;
+    --accent: #ffb020;
+    --danger: #e5484d;
+    --danger-deep: #b93136;
+    --bubble-user: #ffe066;
+    --pov-stage-bg: #70d6c5;
+    --pov-chat-bg: #8ee4d5;
+    --pov-accent: #ff5d8f;
+  }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background-color: var(--page-bg); color: var(--ink);
+    background-image: radial-gradient(rgba(255,255,255,.4) 2px, transparent 2.5px);
+    background-size: 24px 24px;
+    display: flex; justify-content: center;
+  }
+  #app { width: 100%; max-width: 480px; height: 100dvh; display: flex; flex-direction: column; background: var(--paper); box-shadow: 0 0 0 4px var(--ink), 12px 12px 0 rgba(51,37,63,.3); }
+
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    background: var(--paper); border-bottom: 3px solid var(--ink); flex: none;
+  }
+  #worldBtn {
+    flex: 1; min-width: 0; text-align: left; font-size: 15px; font-weight: 800;
+    border: none; background: none; color: var(--ink); padding: 6px 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  header .tool {
+    flex: none; border: 3px solid var(--ink); background: var(--accent); color: var(--ink);
+    font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+    box-shadow: 0 3px 0 var(--ink);
+  }
+  button { position: relative; overflow: hidden; transition: transform .1s, box-shadow .1s; }
+  button:active { transform: translateY(2px); }
+  header .tool:active, .btn:active { box-shadow: 0 1px 0 var(--ink); }
+  .btn.primary:active, #sendBtn:active { box-shadow: 0 1px 0 var(--primary-deep); }
+  #stopBtn:active { box-shadow: 0 1px 0 var(--danger-deep); }
+
+  #sceneBar {
+    display: flex; gap: 8px; align-items: center; padding: 8px 12px;
+    background: var(--paper); border-bottom: 3px solid var(--ink); overflow-x: auto; flex: none;
+  }
+  .chip {
+    display: flex; align-items: center; gap: 6px; border: 3px solid var(--ink);
+    border-radius: 999px; padding: 3px 12px 3px 3px; font-size: 12px; font-weight: 700; cursor: pointer;
+    background: var(--paper-2); color: var(--ink); flex: none; box-shadow: 0 3px 0 var(--ink);
+    position: relative; overflow: hidden;
+    transition: opacity .15s, transform .1s, box-shadow .1s;
+  }
+  .chip:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  .chip.off { opacity: .45; }
+  .chip .st { font-size: 10px; color: var(--ink-soft); }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%; overflow: hidden; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 800; position: relative;
+    border: 2px solid var(--ink);
+  }
+  .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .avatar.lg { width: 44px; height: 44px; font-size: 19px; border-width: 3px; }
+
+  #stage {
+    flex: none; height: 150px; display: flex; align-items: flex-end; gap: 14px;
+    padding: 10px 16px 0; overflow-x: auto; overflow-y: hidden;
+    background-color: var(--pov-stage-bg);
+    background-image: repeating-conic-gradient(rgba(255,255,255,.28) 0% 25%, rgba(255,255,255,0) 0% 50%);
+    background-size: 18px 18px;
+    border-bottom: 3px solid var(--ink);
+    transition: background-color .5s;
+  }
+  #stage[hidden] { display: none; }
+  .standee {
+    position: relative; flex: none; width: 84px; height: 124px;
+    border: 3px solid var(--ink); border-radius: 14px 14px 0 0;
+    box-shadow: 4px 0 0 rgba(51,37,63,.35);
+    display: flex; align-items: flex-end; justify-content: center;
+    transition: transform .3s, box-shadow .3s;
+  }
+  .standee::before {
+    content: ""; position: absolute; top: 5px; left: 5px; width: 6px; height: 6px;
+    background: rgba(255,255,255,.9);
+    box-shadow: 9px 0 0 rgba(255,255,255,.45), 0 9px 0 rgba(255,255,255,.45);
+  }
+  .standee img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 11px 11px 0 0; }
+  .standee .nm {
+    position: relative; z-index: 1; max-width: calc(100% - 8px); margin-bottom: 6px;
+    background: var(--ink); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .standee.focus { transform: translateY(-6px) scale(1.07); z-index: 2; box-shadow: 4px 0 0 rgba(51,37,63,.35), 0 0 0 3px var(--pov-accent); }
+  @keyframes standeeIn { from { transform: translateY(30px) scale(.7); opacity: 0; } }
+  .standee.entering { animation: standeeIn .28s ease-out; }
+  @keyframes standeeOut { to { transform: translateY(30px) scale(.7); opacity: 0; } }
+  .standee.leaving { animation: standeeOut .25s ease-in forwards; }
+
+  #chat {
+    flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 12px;
+    background-color: var(--pov-chat-bg);
+    background-image: radial-gradient(rgba(255,255,255,.55) 2px, transparent 2.5px);
+    background-size: 20px 20px;
+    transition: background-color .5s;
+  }
+  #emptyHint {
+    margin: auto; color: var(--ink); font-size: 13px; text-align: center; line-height: 2;
+    padding: 16px 20px; background: var(--paper-2); border: 3px dashed var(--ink); border-radius: 14px;
+  }
+  .msg { display: flex; flex-direction: column; max-width: 92%; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: stretch; max-width: 100%; }
+  .bubble {
+    padding: 10px 12px; border-radius: 14px; font-size: 14px; line-height: 1.75;
+    word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
+    border: 3px solid var(--ink);
+  }
+  .msg.user .bubble { background: var(--bubble-user); color: var(--ink); border-bottom-right-radius: 4px; box-shadow: 3px 3px 0 rgba(51,37,63,.85); }
+  .msg.assistant .bubble { background: var(--paper-2); border-top-left-radius: 4px; box-shadow: -3px 3px 0 rgba(51,37,63,.85); }
+  .meta { font-size: 11px; color: var(--ink-soft); margin: 0 4px 4px; display: flex; gap: 8px; align-items: center; font-weight: 700; }
+  .msg.user .meta { justify-content: flex-end; margin: 0 4px 4px 0; }
+  .msg-actions { display: flex; gap: 10px; margin-top: 4px; padding: 0 4px; }
+  .msg-actions button { border: none; background: none; color: var(--ink-soft); font-size: 11px; font-weight: 700; cursor: pointer; padding: 2px; }
+  .streaming .bubble::after { content: "\258D"; color: var(--primary); animation: blink .8s infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #inputBar {
+    flex: none; display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: var(--paper); border-top: 3px solid var(--ink);
+  }
+  #povSel {
+    flex: none; max-width: 108px; border: 3px solid var(--ink); border-radius: 10px;
+    padding: 8px 6px; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper-2);
+    cursor: pointer; outline: none;
+  }
+  #promptInput {
+    flex: 1; resize: none; border: 3px solid var(--ink); border-radius: 12px;
+    padding: 9px 12px; font-size: 14px; line-height: 1.5; max-height: 120px;
+    font-family: inherit; background: var(--paper-2); outline: none;
+  }
+  #promptInput:focus, #povSel:focus, .form input:focus, .form textarea:focus, .form select:focus {
+    border-color: var(--primary);
+    animation: focusPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes focusPulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(255,93,143,.35); }
+    50% { box-shadow: 0 0 0 5px rgba(255,93,143,.16); }
+  }
+  #sendBtn, #stopBtn {
+    flex: none; border: 3px solid var(--ink); border-radius: 12px; padding: 8px 16px;
+    font-size: 14px; font-weight: 800; cursor: pointer; color: #fff; background: var(--primary);
+    box-shadow: 0 4px 0 var(--primary-deep);
+  }
+  #stopBtn { background: var(--danger); box-shadow: 0 4px 0 var(--danger-deep); }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(51,37,63,.55);
+    display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    background: var(--paper); width: 100%; max-width: 480px; max-height: 82dvh;
+    border: 3px solid var(--ink); border-bottom: none;
+    border-radius: 20px 20px 0 0; padding: 16px; overflow-y: auto;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(40px); transition: transform .25s;
+  }
+  .overlay.open .sheet { transform: none; }
+  .sheet h2 { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
+  .sheet .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 2px dashed rgba(51,37,63,.25); }
+  .sheet .row .grow { flex: 1; min-width: 0; position: relative; overflow: hidden; border-radius: 8px; }
+  .sheet .row .name { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sheet .row .sub { font-size: 11px; color: var(--ink-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { border: 3px solid var(--ink); background: var(--paper-2); color: var(--ink); border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
+  .btn.primary { background: var(--primary); color: #fff; box-shadow: 0 3px 0 var(--primary-deep); }
+  .btn.danger { color: var(--danger); }
+  .btn.block { width: 100%; margin-top: 12px; padding: 10px; }
+  .form label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin: 12px 0 4px; }
+  .form input, .form textarea, .form select {
+    width: 100%; border: 3px solid var(--ink); border-radius: 10px; padding: 8px 10px;
+    font-size: 14px; font-family: inherit; background: var(--paper-2); outline: none;
+  }
+  .form textarea { resize: vertical; min-height: 90px; }
+  .form .btns { display: flex; gap: 10px; margin-top: 16px; }
+  .form .btns .btn { flex: 1; padding: 10px; }
+  .note { font-size: 12px; color: var(--ink-soft); line-height: 1.7; margin-top: 10px; }
+  .switch { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink); }
+
+  #toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; font-size: 13px; font-weight: 700; line-height: 1.6;
+    padding: 9px 16px; border-radius: 12px; z-index: 99; max-width: 86vw;
+    border: 3px solid var(--accent);
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  #toast.show { opacity: 1; }
+
+  .ripple {
+    position: absolute; border-radius: 50%; background: currentColor;
+    opacity: .28; transform: scale(0); pointer-events: none;
+    animation: rip .45s ease-out forwards;
+  }
+  @keyframes rip { to { transform: scale(2.4); opacity: 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+  }
+
+  /* ---- 桌面 / 宽屏适配：仅新增媒体查询，基础规则（移动端）保持原样 ---- */
+  @media (min-width: 768px) {
+    #app { max-width: 640px; }
+    #toast { max-width: 480px; }
+    .overlay { align-items: center; padding: 24px; }
+    .sheet {
+      max-width: 560px; max-height: 80vh;
+      border-bottom: 3px solid var(--ink); border-radius: 20px;
+      transform: translateY(12px);
+    }
+    #chat, #sceneBar, #stage, .sheet { scrollbar-width: thin; scrollbar-color: var(--ink-soft) transparent; }
+    #chat::-webkit-scrollbar, .sheet::-webkit-scrollbar { width: 8px; }
+    #sceneBar::-webkit-scrollbar, #stage::-webkit-scrollbar { width: 6px; height: 6px; }
+    #chat::-webkit-scrollbar-track, #sceneBar::-webkit-scrollbar-track, #stage::-webkit-scrollbar-track, .sheet::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb, #sceneBar::-webkit-scrollbar-thumb, #stage::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb { background: var(--ink-soft); border-radius: 999px; }
+    #chat::-webkit-scrollbar-thumb:hover, #sceneBar::-webkit-scrollbar-thumb:hover, #stage::-webkit-scrollbar-thumb:hover, .sheet::-webkit-scrollbar-thumb:hover { background: var(--ink); }
+  }
+  @media (min-width: 1024px) {
+    #app { max-width: 860px; }
+    #stage { height: 210px; }
+    .standee { width: 116px; height: 170px; }
+    .standee .nm { font-size: 12px; }
+    .msg { max-width: 78%; }
+    .msg.assistant { max-width: 84%; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    header .tool:hover, .btn:hover, .chip:hover, #sendBtn:hover, #stopBtn:hover { transform: translateY(-1px); }
+    header .tool:hover, .btn:hover, .chip:hover { box-shadow: 0 4px 0 var(--ink); }
+    .btn.primary:hover { box-shadow: 0 4px 0 var(--primary-deep); }
+    #sendBtn:hover { box-shadow: 0 5px 0 var(--primary-deep); }
+    #stopBtn:hover { box-shadow: 0 5px 0 var(--danger-deep); }
+    header .tool:hover:active, .btn:hover:active, .chip:hover:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+    .btn.primary:hover:active { box-shadow: 0 1px 0 var(--primary-deep); }
+    #sendBtn:hover:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--primary-deep); }
+    #stopBtn:hover:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--danger-deep); }
+    .msg-actions button { transition: transform .1s, box-shadow .1s, color .15s; }
+    .msg-actions button:hover { color: var(--ink); }
+    #worldBtn { transition: transform .1s, box-shadow .1s, color .15s; }
+    #worldBtn:hover { color: var(--primary); }
+    .sheet .row .grow { transition: background .15s; }
+    .sheet .row .grow:hover { background: rgba(51,37,63,.07); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="worldBtn" title="切换 / 管理世界观">…</button>
+    <button class="tool" id="charBtn">角色</button>
+    <button class="tool" id="settingsBtn">设置</button>
+  </header>
+  <div id="sceneBar"></div>
+  <section id="stage" hidden></section>
+  <main id="chat"></main>
+  <footer id="inputBar">
+    <select id="povSel" title="叙事视角"></select>
+    <textarea id="promptInput" rows="1" placeholder="输入剧情指令或角色台词…"></textarea>
+    <button id="sendBtn">发送</button>
+    <button id="stopBtn" hidden>停止</button>
+  </footer>
+</div>
+
+<!-- 世界观管理 / 切换 -->
+<div class="overlay" id="worldOverlay" hidden>
+  <div class="sheet">
+    <h2>世界观</h2>
+    <div id="worldList"></div>
+    <button class="btn block" id="newWorldBtn">＋ 新建世界观</button>
+    <div id="worldForm" class="form" hidden>
+      <label>名称</label><input id="wfName" placeholder="世界观名称">
+      <label>背景设定（时间、地点、规则、基调…）</label>
+      <textarea id="wfSetting" placeholder="在这里描述这个世界…"></textarea>
+      <div class="btns"><button class="btn" id="wfCancel">取消</button><button class="btn primary" id="wfSave">保存</button></div>
+    </div>
+    <button class="btn block" id="worldClose">关闭</button>
+  </div>
+</div>
+
+<!-- 角色管理 -->
+<div class="overlay" id="charOverlay" hidden>
+  <div class="sheet">
+    <h2>角色 <span style="font-size:12px;color:var(--ink-soft);font-weight:400">（勾选表示出场）</span></h2>
+    <div id="charList"></div>
+    <button class="btn block" id="newCharBtn">＋ 新建角色</button>
+    <div id="charForm" class="form" hidden>
+      <label>姓名</label><input id="cfName" placeholder="角色姓名">
+      <label>立绘图片 URL（可留空，用占位符；本地文件可填 portraits/角色名.png）</label><input id="cfAvatar" placeholder="portraits/张极.png 或 https://…">
+      <label>主题色（留空则按名字自动配色）</label><input id="cfColor" placeholder="#ff7a1a">
+      <label>设定（外貌、性格、背景、与其他角色的关系…）</label>
+      <textarea id="cfProfile" placeholder="在这里写 TA 的人设…"></textarea>
+      <div class="btns"><button class="btn" id="cfCancel">取消</button><button class="btn primary" id="cfSave">保存</button></div>
+    </div>
+    <button class="btn block" id="charClose">关闭</button>
+  </div>
+</div>
+
+<!-- 设置 -->
+<div class="overlay" id="settingsOverlay" hidden>
+  <div class="sheet">
+    <h2>设置</h2>
+    <div class="form">
+      <label>API Base（OpenAI 兼容，如 https://api.example.com/v1）</label>
+      <input id="stBase" placeholder="https://…/v1">
+      <label>API Key</label><input id="stKey" type="password" placeholder="sk-…">
+      <label>模型名</label><input id="stModel" placeholder="如 gpt-4o-mini">
+      <div class="btns"><button class="btn primary" id="stSave">保存</button></div>
+    </div>
+    <p class="note">⚠️ API Key 以明文保存在本浏览器 localStorage 中，仅会发往你配置的端点。共用设备请注意风险。端点需支持浏览器跨域（CORS）与流式（stream）输出。</p>
+    <h2 style="margin-top:20px">数据备份</h2>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn" id="exportBtn" style="flex:1">导出 JSON</button>
+      <button class="btn" id="importBtn" style="flex:1">导入 JSON</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <button class="btn block" id="settingsClose">关闭</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================= 常量 ================= */
+const LS_KEY = "cp-rp-store";
+const GEN_PARAMS = { temperature: 0.9, top_p: 0.95, max_tokens: 2048 }; // D8 固定参数
+const HISTORY_LIMIT = 20;
+const STREAM_IDLE_TIMEOUT = 30000;
+
+/* ================= 工具 ================= */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function $(sel) { return document.querySelector(sel); }
+function charHue(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+function hashColor(str) { return "hsl(" + charHue(str) + ",70%,55%)"; }
+function charColor(c) { return c.color || hashColor(c.id); }
+function hexToHsl(hex) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, Math.round(l * 100)];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [Math.round(h * 60), Math.round(s * 100), Math.round(l * 100)];
+}
+const reduceMotionMQ = window.matchMedia("(prefers-reduced-motion: reduce)");
+function bindRipple() {
+  document.addEventListener("pointerdown", function (e) {
+    if (reduceMotionMQ.matches) return;
+    const t = e.target.closest("button, .chip, .sheet .row .grow");
+    if (!t || t.disabled) return;
+    const rect = t.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const r = document.createElement("span");
+    r.className = "ripple";
+    r.style.width = r.style.height = size + "px";
+    r.style.left = (e.clientX - rect.left - size / 2) + "px";
+    r.style.top = (e.clientY - rect.top - size / 2) + "px";
+    t.appendChild(r);
+    setTimeout(function () { r.remove(); }, 500);
+  });
+}
+let toastTimer = null;
+function toast(text) {
+  const t = $("#toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+/* ================= 数据层（design D2 / D5） ================= */
+let store = null;
+let streamState = null; // { abort, msgId }
+
+function saveStore() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
+  catch (e) { toast("存储空间不足，建议在设置页导出备份后清理对话"); }
+}
+function seedStore() {
+  const c1 = { id: uid(), name: "朱志鑫", avatar: "portraits/朱志鑫.png", color: "#f2b100", profile: "182cm，20岁，队长，大哥，重庆人，S级哨兵，精神体是缅因猫，精神世界是一片金黄色的宝库，力量型突击手。他非常会抓时机，敢于冲在最前面，无条件相信队员的掩护和支援。他几乎是你见过最帅的人，不笑时是阴暗地雷男长相，但笑起来非常傻，嘴巴会变成爱心型。不开口也不笑的时候有点吓人。不太聪明但是很看得开这点，正经时也很靠谱。口头禅是天天开心，会健身，很能吃，经常被大家调侃。虽然是大哥但有些幼稚。他对外人是一个酷酷的装逼男，只要有镜子或者镜头就会不停进行外貌check。是个老好人，甚至可以说有点窝囊，但保护四个弟弟时说一不二雷厉风行。" };
+  const c2 = { id: uid(), name: "左航", avatar: "portraits/左航.png", color: "#1e9eff", profile: "176cm，二哥，S级向导，精神体是一只奶牛猫，精神图景是一片蓝色的汪洋大海，支援位，临时急救精神增强侦查情报等各种杂活都是他干，效率高话少。萌妹脸庞，妈妈内心。重庆人，长相美萌到能让人看了一愣，非常精致漂亮小巧的萌妹系。小小的脸上长着长睫毛大眼睛和精致的五官，身材也非常纤细，标准冷脸萌。但他心里住着一个刚硬的男人。一个傲娇，会推脱队友的亲密接触但磨一磨也不会真的拒绝。INFP，喜欢骑摩托车，有很多奇思妙想，但是很稳重情商高，是小队唯一会做饭的成员！除了精神体奶牛猫以外，养了一只蓝眼布偶叫厚米。他和张极一样向往自由，喜欢听风的声音，会在凌晨骑摩托车去山上看日出，敢做很多别人不敢做的事。左航对陌生人淡淡的，但对关系好的人就会变成重庆小辣椒。对关系好的人会吃闷醋，有点回避型人格，不太喜欢把感情外露哗众取宠。猴猴很敏锐也很感性，经常反思自己，他的文笔也是最好的。（因此报告也被推给他写）" };
+  const c3 = { id: uid(), name: "苏新皓", avatar: "portraits/苏新皓.png", color: "#ef3f4c", profile: "178cm，三哥，S级哨兵，精神体是一只北极狐，精神图景是红色的永燃火山，狙击手。技巧型哨兵，虽然担任狙击手但各种位置的技巧都会，而且力气很大，平常会自己组装一些小道具在战场上发挥奇效。河南人，entj卷王型人格，有事业心，非常外向，从不吝啬表达爱，是小太阳一样的人。非常高精力，可以从工作中获取能量，这点让四个队友很是佩服。喜欢画画，摄影，舞蹈，艺术造诣很高。一直在努力加强和队友的配合，对四个队友都很宠溺。觉醒之前的家里很富有，所以他的家教很好，大少爷大小姐的类型，有点缺乏常识，这也是萌点之一。" };
+  const c4 = { id: uid(), name: "张极", avatar: "portraits/张极.png", color: "#ff7a1a", profile: "183cm，19岁，S级哨兵，精神体是萨摩耶，精神图景是一片橘色的海滩，力量型攻坚手，常常负责正面扛火力突破，也是最经常受伤的一个，但他自己觉得这样很帅。爱吃炸鸡排，骑自行车，开车旅游，不能吃辣。张极是一个乐观的男孩，整个人站在那儿就很有男友感和安全感。除了精神体萨摩耶外还养了一只柯基叫啵啵，是一只喜欢贴贴也招人喜欢的小猪系男孩。但他不贴贴时是一个一米八男模身材的伟岸男孩，生活技能点满，很有男友力。江苏金坛人，是易胖体质，所以经常被迫健身保持身材。张极觉得跟关系好的人表现得亲密是正常地像空气一样的事，这只是他真情流露。说话黏黏糊糊的，有点小任性，小自我中心，但这也让他充满了别样的魅力，他是行动派，力气很大很会干活。" };
+  const c5 = { id: uid(), name: "张泽禹", avatar: "portraits/张泽禹.png", color: "#34b55a", profile: "180cm，19岁，S级向导，精神体是金毛巡回猎犬，精神世界是一片绿色的密林，队内指挥，智商极高，能快速推演战局形势并进行布置，自己喜欢出其不意绕后抓落单，智斗王者。性格非常自来熟，能说会道，非常聪明，东北人。虽然是最小的但是非常靠谱，非常外向。人缘非常好，很懂相处的分寸，幽默风趣，精打细算但是对朋友非常仗义，不斤斤计较。很会说俏皮话逗人开心，乐观看得开，虽然很有事业心，但尽人事听天命，心态很平稳。" };
+  const w = {
+    id: uid(), name: "哨向世界 · TOP特别行动小组",
+    setting: [
+      "【世界基底】本世界与现代地球高度相似，但存在稀有觉醒者人群：哨兵五感与神经反应极度敏锐，战斗力、侦查力远超常人，但易过载、易精神暴走；向导共情力、精神感应与情绪疏导能力极强，可安抚、引导、重构哨兵的精神状态，但自身易被反向污染。觉醒者的精神内核外化为动物形态的「精神体」（可实体化为半透明能量态），内心世界具象为可探索的「精神图景」。管理、训练、调配觉醒者的核心机构称为「塔」，负责登记、训练、配对与任务派遣。哨兵与向导之间可建立深度精神链接，称为「结合」，分临时结合与永久结合，必须双方自愿，强制结合为重罪。普通人占人口九成以上，对觉醒者既依赖又警惕。觉醒者按能力分 S/A/B/C/D 级，S级最强但精神风险最高。",
+      "",
+      "【微观背景】TOP特别行动小组由五名男性成员组成，其中包括三名哨兵和两名向导，队长是朱志鑫。年龄顺序：朱志鑫大哥20岁，左航二哥20岁，苏新皓三哥19岁，张极四弟19岁，张泽禹最小19岁。这只行动小队是联邦的秘密青训机构培养的，经过7年高强度训练和遴选后五人脱颖而出组成了这只精锐小队，其资料高度保密，经常被派去进行高危任务。五人之间关系非常好，小队成立至今已两年，最近刚被从边疆调回联邦疆域。",
+      "",
+      "【队员关系】朱志鑫和苏新皓是最早认识开始训练的两人。经常朱志鑫犯傻张泽禹调侃，两人相处很舒适。朱志鑫张极互相开玩笑百无禁忌。朱志鑫左航都是重庆人有共同话题帅哥惺惺相惜。张极张泽禹两个人小时候都是从外地送来的有很多共鸣。张泽禹左航两向导聪明人有共同语言。张泽禹苏新皓过去训练时有些矛盾但现在已经和好，两人因事业心产生共鸣。张极左航单独相处的时候有莫名的暧昧氛围张极直进左航会躲闪。苏新皓像家长一样宠着张极。左航苏新皓两个人待在一起像开了净化一样特别和谐，像闺蜜？虽然外界有诸多揣测，但五个人其实关系非常黏糊。"
+    ].join("\n"),
+    characters: [c1, c2, c3, c4, c5], scene: [c1.id, c2.id, c3.id, c4.id, c5.id], messages: []
+  };
+  store = { v: 1, settings: { apiBase: "https://api.deepseek.com/v1", apiKey: "sk-00363d8684c64740b9ae3e29b40e8378", model: "deepseek-chat" }, currentWorldId: w.id, worlds: {} };
+  store.worlds[w.id] = w;
+  saveStore();
+}
+function ensureStore() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) { store = JSON.parse(raw); }
+  } catch (e) { store = null; }
+  if (!store || typeof store !== "object" || !store.worlds || !store.currentWorldId || !store.worlds[store.currentWorldId]) {
+    seedStore();
+  }
+}
+function curWorld() { return store.worlds[store.currentWorldId]; }
+function charById(w, id) { return w.characters.find(c => c.id === id); }
+function povLabel(w, pov) { return pov === "god" ? "上帝视角" : ("视角：" + ((charById(w, pov) || {}).name || "未知角色")); }
+
+/* ================= HTML 消毒（design D7） ================= */
+const SAFE_TAGS = new Set(["DIV","SPAN","P","B","I","EM","STRONG","U","S","BR","HR","IMG","BLOCKQUOTE","UL","OL","LI","H1","H2","H3","H4","TABLE","THEAD","TBODY","TR","TD","TH","CAPTION"]);
+const DROP_TAGS = new Set(["SCRIPT","STYLE","IFRAME","OBJECT","EMBED","LINK","META","BASE","FORM","INPUT","BUTTON","TEXTAREA","SELECT","OPTION","VIDEO","AUDIO","SOURCE","SVG","MATH","FRAME","FRAMESET","NOSCRIPT","TEMPLATE"]);
+function sanitizeStyle(css) {
+  if (/url\s*\(|expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding/i.test(css)) return "";
+  return css;
+}
+function sanitizeHtml(html) {
+  const doc = new DOMParser().parseFromString(String(html), "text/html");
+  function clean(node) {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 8) { child.remove(); continue; }       // 注释
+      if (child.nodeType !== 1) continue;                            // 文本放行
+      const tag = child.tagName;
+      if (DROP_TAGS.has(tag)) { child.remove(); continue; }          // 整体剔除
+      if (!SAFE_TAGS.has(tag)) {                                     // 解包保留子内容
+        while (child.firstChild) node.insertBefore(child.firstChild, child);
+        node.removeChild(child);
+        clean(node);
+        return;
+      }
+      for (const attr of Array.from(child.attributes)) {             // 属性白名单
+        const n = attr.name.toLowerCase();
+        if (n === "style") {
+          const s = sanitizeStyle(attr.value);
+          if (s) child.setAttribute("style", s); else child.removeAttribute("style");
+        } else if (tag === "IMG" && n === "src") {
+          if (!/^(https:|data:image\/)/i.test(attr.value.trim())) child.removeAttribute("src");
+        } else if (tag === "IMG" && n === "alt") {
+          /* 保留 */
+        } else {
+          child.removeAttribute(attr.name);
+        }
+      }
+      clean(child);
+    }
+  }
+  clean(doc.body);
+  return doc.body.innerHTML;
+}
+function looksLikeHtml(text) { return /<\/?[a-zA-Z][^>]*>/.test(text); }
+
+/* ================= Prompt 组装（design D4） ================= */
+function buildSystemPrompt(w, pov) {
+  const sceneChars = w.scene.map(id => charById(w, id)).filter(Boolean);
+  const charLines = sceneChars.map(c => "· " + c.name + "：" + (c.profile || "（无设定）")).join("\n");
+  let povInst;
+  if (pov === "god") {
+    povInst = "使用上帝（全知）视角，以第三人称叙述所有出场角色的言行，并可适当描写各角色的内心。";
+  } else {
+    const c = charById(w, pov);
+    povInst = "使用「" + (c ? c.name : "主角") + "」的第一人称视角叙述，可以深入描写其内心活动；不得直接描写其他角色的内心想法，只能通过他们的言行来表现。";
+  }
+  return [
+    "你正在参与一个文字角色扮演游戏，请严格按以下设定与约定输出。",
+    "",
+    "【世界观】",
+    w.setting || "（未设定）",
+    "",
+    "【出场角色】",
+    charLines || "（无）",
+    "",
+    "【叙事视角】",
+    povInst,
+    "",
+    "【输出约定】",
+    "1. 默认使用剧本式输出：`【角色名】动作/台词`，可穿插叙述段落。",
+    "2. 只有出场角色可以发言或行动，不要提及未出场的角色。",
+    "3. 当剧情出现合适的元素（如手机聊天界面、回忆片段、系统/旁白提示、信件、公告等）时，可以直接输出 HTML 片段来呈现。HTML 只允许使用 div/span/p/b/i/em/strong/u/s/br/hr/blockquote/ul/ol/li/h1-h4/table 等排版标签与内联 style，禁止 script、事件属性（如 onclick）与加载外部资源。除此之外的内容保持纯文本。",
+    "4. 不要输出 Markdown 语法。",
+    "5. 回复长度适中，聚焦当下剧情互动。"
+  ].join("\n");
+}
+function buildMessages(w, pov) {
+  const history = w.messages
+    .filter(m => (m.role === "user" || m.role === "assistant") && m.content && m.content.trim())
+    .slice(-HISTORY_LIMIT)
+    .map(m => ({ role: m.role, content: m.content }));
+  return [{ role: "system", content: buildSystemPrompt(w, pov) }].concat(history);
+}
+
+/* ================= SSE 流式调用（design D6） ================= */
+async function sseChat(opts) {
+  const settings = store.settings;
+  const url = settings.apiBase.replace(/\/+$/, "") + "/chat/completions";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + settings.apiKey
+    },
+    body: JSON.stringify(Object.assign({ model: settings.model, messages: opts.messages, stream: true }, GEN_PARAMS)),
+    signal: opts.signal
+  });
+  if (!res.ok) {
+    let detail = "";
+    try { detail = await res.text(); } catch (e) {}
+    throw new Error("API 返回 " + res.status + (detail ? "：" + detail.slice(0, 200) : ""));
+  }
+  if (!res.body) throw new Error("响应不支持流式读取");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const r = await reader.read();
+    if (r.done) break;
+    buf += decoder.decode(r.value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 1);
+      if (!line || line.indexOf("data:") !== 0) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+      try {
+        const json = JSON.parse(data);
+        const choice = json.choices && json.choices[0];
+        const delta = choice && choice.delta && choice.delta.content;
+        if (delta) opts.onDelta(delta);
+      } catch (e) { /* 忽略无法解析的行 */ }
+    }
+  }
+}
+
+/* ================= 发送 / 生成流程 ================= */
+function setStreaming(on) {
+  $("#sendBtn").hidden = on;
+  $("#stopBtn").hidden = !on;
+  $("#promptInput").disabled = on;
+  $("#povSel").disabled = on;
+}
+function currentPov() { return $("#povSel").value || "god"; }
+
+async function generateReply(pov) {
+  const w = curWorld();
+  const aiMsg = { id: uid(), role: "assistant", content: "", pov: pov, ts: Date.now() };
+  w.messages.push(aiMsg);
+  renderMessages();
+  const abort = new AbortController();
+  streamState = { abort: abort, msgId: aiMsg.id };
+  setStreaming(true);
+  let idleTimer = setTimeout(() => abort.abort(), STREAM_IDLE_TIMEOUT);
+  let failed = null, stopped = false;
+  try {
+    await sseChat({
+      messages: buildMessages(w, pov),
+      signal: abort.signal,
+      onDelta: function (d) {
+        aiMsg.content += d;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => abort.abort(), STREAM_IDLE_TIMEOUT);
+        updateStreamingBubble(aiMsg);
+      }
+    });
+  } catch (e) {
+    if (abort.signal.aborted) { stopped = true; }
+    else { failed = e; }
+  }
+  clearTimeout(idleTimer);
+  if (failed) {
+    w.messages = w.messages.filter(m => m.id !== aiMsg.id);
+    toast("生成失败：" + failed.message + "（可能是网络、CORS 或端点不支持流式）");
+  } else if (!aiMsg.content.trim()) {
+    w.messages = w.messages.filter(m => m.id !== aiMsg.id);
+    if (stopped) toast("已停止，未生成内容");
+    else toast("未收到内容");
+  } else if (stopped) {
+    toast("已停止，保留已生成内容");
+  }
+  streamState = null;
+  setStreaming(false);
+  saveStore();
+  renderMessages();
+}
+
+function send() {
+  if (streamState) return;
+  const input = $("#promptInput");
+  const prompt = input.value.trim();
+  if (!prompt) return;
+  const s = store.settings;
+  if (!s.apiBase || !s.apiKey || !s.model) {
+    toast("请先在设置页完成 API 配置");
+    openOverlay("settingsOverlay");
+    return;
+  }
+  const w = curWorld();
+  const pov = currentPov();
+  w.messages.push({ id: uid(), role: "user", content: prompt, pov: pov, ts: Date.now() });
+  saveStore();
+  input.value = "";
+  autoGrow(input);
+  generateReply(pov);
+}
+function stopStream() { if (streamState) streamState.abort.abort(); }
+
+function regenerateLast() {
+  if (streamState) return;
+  const w = curWorld();
+  const last = w.messages[w.messages.length - 1];
+  if (!last || last.role !== "assistant") return;
+  const pov = last.pov || "god";
+  w.messages.pop();
+  saveStore();
+  generateReply(pov);
+}
+function deleteMessage(id) {
+  if (streamState) return;
+  const w = curWorld();
+  w.messages = w.messages.filter(m => m.id !== id);
+  saveStore();
+  renderMessages();
+}
+function clearChat() {
+  if (streamState) return;
+  if (!confirm("确定清空当前世界观的全部对话吗？其他世界观不受影响。")) return;
+  curWorld().messages = [];
+  saveStore();
+  renderMessages();
+}
+
+/* ================= 渲染 ================= */
+function avatarEl(c, lg) {
+  const span = document.createElement("span");
+  span.className = "avatar" + (lg ? " lg" : "");
+  span.style.background = charColor(c);
+  span.textContent = (c.name || "?").slice(0, 1);
+  if (c.avatar) {
+    const img = document.createElement("img");
+    img.src = c.avatar;
+    img.alt = c.name;
+    img.onerror = function () { img.remove(); };
+    span.appendChild(img);
+  }
+  return span;
+}
+
+function renderHeader() {
+  $("#worldBtn").textContent = "🌍 " + curWorld().name + " ▾";
+}
+
+function renderSceneBar() {
+  const w = curWorld();
+  const bar = $("#sceneBar");
+  bar.innerHTML = "";
+  if (!w.characters.length) {
+    const tip = document.createElement("span");
+    tip.style.cssText = "font-size:12px;color:var(--ink-soft)";
+    tip.textContent = "还没有角色，点右上角「角色」创建";
+    bar.appendChild(tip);
+  } else {
+    for (const c of w.characters) {
+      const on = w.scene.indexOf(c.id) >= 0;
+      const chip = document.createElement("button");
+      chip.className = "chip" + (on ? "" : " off");
+      chip.appendChild(avatarEl(c));
+      const nm = document.createElement("span");
+      nm.textContent = c.name;
+      chip.appendChild(nm);
+      const st = document.createElement("span");
+      st.className = "st";
+      st.textContent = on ? "出场" : "离场";
+      chip.appendChild(st);
+      chip.onclick = function () { toggleScene(c.id); };
+      bar.appendChild(chip);
+    }
+  }
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "chip";
+  clearBtn.style.flex = "none";
+  clearBtn.textContent = "🗑 清空对话";
+  clearBtn.onclick = clearChat;
+  bar.appendChild(clearBtn);
+  renderStage();
+}
+
+function renderPovSelect() {
+  const w = curWorld();
+  const sel = $("#povSel");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  const god = document.createElement("option");
+  god.value = "god"; god.textContent = "上帝视角";
+  sel.appendChild(god);
+  for (const id of w.scene) {
+    const c = charById(w, id);
+    if (!c) continue;
+    const op = document.createElement("option");
+    op.value = c.id; op.textContent = c.name + "视角";
+    sel.appendChild(op);
+  }
+  sel.value = (prev && sel.querySelector('option[value="' + prev + '"]')) ? prev : "god";
+  applyPovTheme();
+}
+
+function renderMessages() {
+  const w = curWorld();
+  const chat = $("#chat");
+  chat.innerHTML = "";
+  if (!w.messages.length) {
+    const hint = document.createElement("div");
+    hint.id = "emptyHint";
+    hint.innerHTML = "✦ 在下方输入剧情指令或角色台词 ✦<br>让 TA 们开始互动吧 ◆<br><br>右上角「角色」可编辑人设与立绘，<br>点顶栏世界观名可切换世界。";
+    chat.appendChild(hint);
+    return;
+  }
+  w.messages.forEach(function (m, i) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + m.role + (streamState && streamState.msgId === m.id ? " streaming" : "");
+    wrap.dataset.mid = m.id;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = m.role === "user" ? "导演指令" : povLabel(w, m.pov);
+    wrap.appendChild(meta);
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (streamState && streamState.msgId === m.id) {
+      bubble.textContent = m.content; // 流式阶段纯文本
+    } else if (m.role === "assistant" && looksLikeHtml(m.content)) {
+      bubble.innerHTML = sanitizeHtml(m.content); // 富渲染（消毒后）
+    } else {
+      bubble.textContent = m.content;
+    }
+    wrap.appendChild(bubble);
+
+    const actions = document.createElement("div");
+    actions.className = "msg-actions";
+    const del = document.createElement("button");
+    del.textContent = "删除";
+    del.onclick = function () { deleteMessage(m.id); };
+    actions.appendChild(del);
+    if (m.role === "assistant" && i === w.messages.length - 1 && !streamState) {
+      const regen = document.createElement("button");
+      regen.textContent = "重新生成";
+      regen.onclick = regenerateLast;
+      actions.appendChild(regen);
+    }
+    wrap.appendChild(actions);
+    chat.appendChild(wrap);
+  });
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function updateStreamingBubble(m) {
+  const el = document.querySelector('.msg[data-mid="' + m.id + '"] .bubble');
+  if (el) {
+    el.textContent = m.content;
+    const chat = $("#chat");
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+/* ---- 舞台区（立绘占位） ---- */
+function standeeEl(c) {
+  const el = document.createElement("div");
+  el.className = "standee";
+  el.dataset.cid = c.id;
+  el.style.background = charColor(c);
+  if (c.avatar) {
+    const img = document.createElement("img");
+    img.src = c.avatar;
+    img.alt = c.name;
+    img.onerror = function () { img.remove(); };
+    el.appendChild(img);
+  }
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = c.name || "?";
+  el.appendChild(nm);
+  return el;
+}
+function updateStageFocus() {
+  const pov = currentPov();
+  Array.from($("#stage").children).forEach(function (el) {
+    el.classList.toggle("focus", pov !== "god" && el.dataset.cid === pov);
+  });
+}
+function renderStage() {
+  const w = curWorld();
+  const stage = $("#stage");
+  const ids = w.scene.filter(function (id) { return charById(w, id); });
+  if (!ids.length) {
+    stage.innerHTML = "";
+    stage.hidden = true;
+    return;
+  }
+  stage.hidden = false;
+  Array.from(stage.children).forEach(function (el) {
+    if (ids.indexOf(el.dataset.cid) < 0 && !el.classList.contains("leaving")) {
+      el.classList.add("leaving");
+      setTimeout(function () { el.remove(); }, 250);
+    }
+  });
+  ids.forEach(function (id) {
+    const c = charById(w, id);
+    let el = stage.querySelector('.standee[data-cid="' + id + '"]');
+    if (!el) {
+      el = standeeEl(c);
+      el.classList.add("entering");
+      setTimeout(function () { el.classList.remove("entering"); }, 300);
+    } else {
+      el.style.background = charColor(c);
+      const nm = el.querySelector(".nm");
+      if (nm) nm.textContent = c.name || "?";
+      let img = el.querySelector("img");
+      if (c.avatar) {
+        if (!img) {
+          img = document.createElement("img");
+          img.onerror = function () { img.remove(); };
+          el.insertBefore(img, nm);
+        }
+        if (img.getAttribute("src") !== c.avatar) img.src = c.avatar;
+        img.alt = c.name;
+      } else if (img) {
+        img.remove();
+      }
+    }
+    stage.appendChild(el);
+  });
+  updateStageFocus();
+}
+function applyPovTheme() {
+  const pov = currentPov();
+  const app = $("#app");
+  if (pov === "god" || !charById(curWorld(), pov)) {
+    app.style.removeProperty("--pov-stage-bg");
+    app.style.removeProperty("--pov-chat-bg");
+    app.style.removeProperty("--pov-accent");
+  } else {
+    const c = charById(curWorld(), pov);
+    const hsl = c && c.color ? hexToHsl(c.color) : null;
+    const h = hsl ? hsl[0] : charHue(pov);
+    app.style.setProperty("--pov-stage-bg", "hsl(" + h + ",72%,72%)");
+    app.style.setProperty("--pov-chat-bg", "hsl(" + h + ",85%,88%)");
+    app.style.setProperty("--pov-accent", "hsl(" + h + ",85%,55%)");
+  }
+  updateStageFocus();
+}
+
+function renderAll() {
+  renderHeader();
+  renderSceneBar();
+  renderPovSelect();
+  renderMessages();
+}
+
+/* ================= 场景 / 世界观 / 角色操作 ================= */
+function toggleScene(charId) {
+  const w = curWorld();
+  const i = w.scene.indexOf(charId);
+  if (i >= 0) w.scene.splice(i, 1); else w.scene.push(charId);
+  saveStore();
+  renderSceneBar();
+  renderPovSelect();
+  renderCharList();
+}
+
+function openOverlay(id) {
+  const o = $("#" + id);
+  clearTimeout(o._hideTimer);
+  o.hidden = false;
+  void o.offsetWidth;
+  o.classList.add("open");
+}
+function closeOverlay(id) {
+  const o = $("#" + id);
+  o.classList.remove("open");
+  clearTimeout(o._hideTimer);
+  o._hideTimer = setTimeout(function () { o.hidden = true; }, 250);
+}
+
+/* ---- 世界观管理 ---- */
+let editingWorldId = null;
+function renderWorldList() {
+  const list = $("#worldList");
+  list.innerHTML = "";
+  Object.values(store.worlds).forEach(function (w) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const grow = document.createElement("div");
+    grow.className = "grow";
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = (w.id === store.currentWorldId ? "✓ " : "") + w.name;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = w.characters.length + " 个角色 · " + w.messages.length + " 条对话";
+    grow.appendChild(nm); grow.appendChild(sub);
+    grow.style.cursor = "pointer";
+    grow.onclick = function () { switchWorld(w.id); };
+    const edit = document.createElement("button");
+    edit.className = "btn"; edit.textContent = "编辑";
+    edit.onclick = function () { openWorldForm(w.id); };
+    const del = document.createElement("button");
+    del.className = "btn danger"; del.textContent = "删";
+    del.onclick = function () { deleteWorld(w.id); };
+    row.appendChild(grow); row.appendChild(edit); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+function openWorldForm(id) {
+  editingWorldId = id || null;
+  const w = id ? store.worlds[id] : null;
+  $("#wfName").value = w ? w.name : "";
+  $("#wfSetting").value = w ? w.setting : "";
+  $("#worldForm").hidden = false;
+}
+function saveWorldForm() {
+  const name = $("#wfName").value.trim();
+  if (!name) { toast("请填写世界观名称"); return; }
+  const setting = $("#wfSetting").value;
+  if (editingWorldId) {
+    const w = store.worlds[editingWorldId];
+    w.name = name; w.setting = setting;
+  } else {
+    const w = { id: uid(), name: name, setting: setting, characters: [], scene: [], messages: [] };
+    store.worlds[w.id] = w;
+    store.currentWorldId = w.id;
+  }
+  saveStore();
+  $("#worldForm").hidden = true;
+  renderWorldList();
+  renderAll();
+}
+function switchWorld(id) {
+  if (streamState) { toast("生成中，稍后再切换"); return; }
+  store.currentWorldId = id;
+  saveStore();
+  renderWorldList();
+  renderAll();
+  closeOverlay("worldOverlay");
+}
+function deleteWorld(id) {
+  const w = store.worlds[id];
+  if (!confirm("删除「" + w.name + "」将同时删除其所有角色与对话，确定吗？")) return;
+  delete store.worlds[id];
+  if (store.currentWorldId === id) {
+    const rest = Object.keys(store.worlds);
+    if (rest.length) {
+      store.currentWorldId = rest[0];
+    } else {
+      const fresh = { id: uid(), name: "新世界观", setting: "", characters: [], scene: [], messages: [] };
+      store.worlds[fresh.id] = fresh;
+      store.currentWorldId = fresh.id;
+    }
+  }
+  saveStore();
+  renderWorldList();
+  renderAll();
+}
+
+/* ---- 角色管理 ---- */
+let editingCharId = null;
+function renderCharList() {
+  if ($("#charOverlay").hidden) return;
+  const w = curWorld();
+  const list = $("#charList");
+  list.innerHTML = "";
+  w.characters.forEach(function (c) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.appendChild(avatarEl(c, true));
+    const grow = document.createElement("div");
+    grow.className = "grow";
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = c.name;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    sub.textContent = (c.profile || "").slice(0, 40);
+    grow.appendChild(nm); grow.appendChild(sub);
+    grow.style.cursor = "pointer";
+    grow.onclick = function () { openCharForm(c.id); };
+    const sw = document.createElement("label");
+    sw.className = "switch";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = w.scene.indexOf(c.id) >= 0;
+    cb.onchange = function () { toggleScene(c.id); };
+    sw.appendChild(cb);
+    sw.appendChild(document.createTextNode("出场"));
+    const edit = document.createElement("button");
+    edit.className = "btn"; edit.textContent = "编辑";
+    edit.onclick = function () { openCharForm(c.id); };
+    const del = document.createElement("button");
+    del.className = "btn danger"; del.textContent = "删";
+    del.onclick = function () { deleteChar(c.id); };
+    row.appendChild(grow); row.appendChild(sw); row.appendChild(edit); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+function openCharForm(id) {
+  editingCharId = id || null;
+  const c = id ? charById(curWorld(), id) : null;
+  $("#cfName").value = c ? c.name : "";
+  $("#cfAvatar").value = c ? (c.avatar || "") : "";
+  $("#cfColor").value = c ? (c.color || "") : "";
+  $("#cfProfile").value = c ? (c.profile || "") : "";
+  $("#charForm").hidden = false;
+}
+function saveCharForm() {
+  const name = $("#cfName").value.trim();
+  if (!name) { toast("请填写角色姓名"); return; }
+  let color = $("#cfColor").value.trim();
+  if (color) {
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color);
+    if (!m) { toast("主题色格式应为 #rgb 或 #rrggbb，留空则自动配色"); return; }
+    color = "#" + m[1].toLowerCase();
+    if (color.length === 4) color = "#" + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+  }
+  const w = curWorld();
+  if (editingCharId) {
+    const c = charById(w, editingCharId);
+    c.name = name; c.avatar = $("#cfAvatar").value.trim(); c.color = color; c.profile = $("#cfProfile").value;
+  } else {
+    const c = { id: uid(), name: name, avatar: $("#cfAvatar").value.trim(), color: color, profile: $("#cfProfile").value };
+    w.characters.push(c);
+    w.scene.push(c.id);
+  }
+  saveStore();
+  $("#charForm").hidden = true;
+  renderCharList();
+  renderSceneBar();
+  renderPovSelect();
+}
+function deleteChar(id) {
+  const w = curWorld();
+  const c = charById(w, id);
+  if (!confirm("删除角色「" + c.name + "」？历史对话会保留。")) return;
+  w.characters = w.characters.filter(x => x.id !== id);
+  w.scene = w.scene.filter(x => x !== id);
+  saveStore();
+  renderCharList();
+  renderSceneBar();
+  renderPovSelect();
+}
+
+/* ---- 设置 / 导入导出 ---- */
+function openSettings() {
+  $("#stBase").value = store.settings.apiBase || "";
+  $("#stKey").value = store.settings.apiKey || "";
+  $("#stModel").value = store.settings.model || "";
+  openOverlay("settingsOverlay");
+}
+function saveSettings() {
+  store.settings.apiBase = $("#stBase").value.trim();
+  store.settings.apiKey = $("#stKey").value.trim();
+  store.settings.model = $("#stModel").value.trim();
+  saveStore();
+  toast("设置已保存");
+  closeOverlay("settingsOverlay");
+}
+function exportJson() {
+  const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "cp-rp-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importJson(file) {
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || typeof data !== "object" || !data.worlds || typeof data.worlds !== "object" || !data.currentWorldId || !data.worlds[data.currentWorldId]) {
+        throw new Error("文件结构不正确");
+      }
+      if (!confirm("导入将覆盖当前全部数据，确定吗？")) return;
+      if (!data.settings) data.settings = { apiBase: "", apiKey: "", model: "" };
+      store = data;
+      saveStore();
+      renderAll();
+      toast("导入成功");
+      closeOverlay("settingsOverlay");
+    } catch (e) {
+      toast("导入失败：" + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ================= 输入区 ================= */
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+/* ================= 事件绑定 ================= */
+function bindEvents() {
+  $("#sendBtn").onclick = send;
+  $("#stopBtn").onclick = stopStream;
+  $("#promptInput").addEventListener("input", function () { autoGrow(this); });
+  $("#promptInput").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+    if (!matchMedia("(pointer: fine)").matches) return;
+    e.preventDefault();
+    send();
+  });
+  $("#worldBtn").onclick = function () { $("#worldForm").hidden = true; renderWorldList(); openOverlay("worldOverlay"); };
+  $("#charBtn").onclick = function () { $("#charForm").hidden = true; openOverlay("charOverlay"); renderCharList(); };
+  $("#settingsBtn").onclick = openSettings;
+  $("#newWorldBtn").onclick = function () { openWorldForm(null); };
+  $("#wfSave").onclick = saveWorldForm;
+  $("#wfCancel").onclick = function () { $("#worldForm").hidden = true; };
+  $("#worldClose").onclick = function () { closeOverlay("worldOverlay"); };
+  $("#newCharBtn").onclick = function () { openCharForm(null); };
+  $("#cfSave").onclick = saveCharForm;
+  $("#cfCancel").onclick = function () { $("#charForm").hidden = true; };
+  $("#charClose").onclick = function () { closeOverlay("charOverlay"); };
+  $("#stSave").onclick = saveSettings;
+  $("#settingsClose").onclick = function () { closeOverlay("settingsOverlay"); };
+  $("#exportBtn").onclick = exportJson;
+  $("#importBtn").onclick = function () { $("#importFile").click(); };
+  $("#importFile").onchange = function () { if (this.files[0]) importJson(this.files[0]); this.value = ""; };
+  $("#povSel").onchange = applyPovTheme;
+  bindRipple();
+}
+
+/* ================= 启动 ================= */
+ensureStore();
+bindEvents();
+renderAll();
+</script>
+</body>
+</html>
