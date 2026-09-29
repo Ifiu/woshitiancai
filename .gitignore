@@ -1,0 +1,24 @@
+# AI 工具本地配置
+.agents/
+
+# 个人数据备份
+preset/cp-rp-backup-*.json
+
+# Windows 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS 系统文件
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志
+*.log
