@@ -3,6 +3,16 @@
 
 # 个人数据备份
 preset/cp-rp-backup-*.json
+cp-rp-backup-*.json
+
+# 凭据 / 密钥：绝不入库
+*.key
+*.pem
+.env
+.env.*
+!*.env.example
+secrets.json
+config.local.json
 
 # Windows 系统文件
 Thumbs.db

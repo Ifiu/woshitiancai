@@ -6,7 +6,7 @@
 
 1. 直接用浏览器打开 `index.html`（或放到任意静态托管 / 用 `npx serve` 起个本地服务，手机与桌面浏览器均自适应）。
 2. 首次打开会按 `preset/` 的内容初始化：哨兵向导世界观「TOP特别行动小组」与五名出场角色（朱志鑫 / 左航 / 苏新皓 / 张极 / 张泽禹，各带主题色与立绘占位路径）——点右上角「角色」可修改人设、主题色与立绘。
-3. API 信息已随预置填好（DeepSeek 端点），可直接使用；如需更换，点右上角「设置」修改：
+3. 源码中**不含任何 API Key**，请点右上角「设置」自行填写（只保存在你自己的浏览器里）：
    - **API Base**：如 `https://api.deepseek.com/v1`（不要带结尾斜杠也没关系）
    - **API Key**：`sk-…`
    - **模型名**：如 `deepseek-chat`
@@ -26,12 +26,12 @@
 ## 注意事项
 
 - **CORS 与流式**：浏览器直连 API 需要端点允许跨域（CORS）且支持 `stream: true`。如果发送后报错，多半是端点不支持跨域或流式，可换用支持的中转端点。
-- **隐私**：API Key 以明文保存在本浏览器 localStorage，只会发往你配置的端点。共用设备请留意。另外，初始预置把 API Key 直接写在了 `index.html` 源码里——把文件分享给别人之前，请先在设置页清空或替换 Key。
-- **备份**：设置页可一键导出全部数据（世界观 / 角色 / 对话 / 配置）为 JSON，换设备后导入即可恢复。localStorage 有容量上限，长期玩建议定期导出。
+- **隐私与凭据**：API Key 只以明文保存在本浏览器 localStorage，且只会发往你配置的端点。请务必使用 `https` 端点——`http` 会让 Key 明文经过网络（填 http 时页面会警告）。源码与预置数据中不写入任何 Key，导出备份时也会自动剔除 Key，所以备份文件可以安全分享。共用设备请留意，用完在设置页清空 Key。
+- **备份**：设置页可一键导出全部数据（世界观 / 角色 / 对话 / 配置）为 JSON，换设备后导入即可恢复（Key 需重新填写）。localStorage 有容量上限，长期玩建议定期导出。
 
 ## 技术说明
 
 - 单文件 `index.html`，内联 CSS/JS，无任何第三方依赖。
 - LLM 调用：OpenAI 兼容 Chat Completions，SSE 流式（`fetch` + ReadableStream）。
-- 生成参数固定：`temperature 0.9 / top_p 0.95 / max_tokens 2048`（在代码顶部 `GEN_PARAMS` 可改）。
+- 生成参数固定：`temperature 0.9 / top_p 0.95 / max_tokens 3072`（在代码顶部 `GEN_PARAMS` 可改）。
 - 需求与设计文档见 `openspec/changes/cp-roleplay-chat/`。

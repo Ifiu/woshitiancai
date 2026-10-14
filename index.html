@@ -356,7 +356,7 @@
       <label>模型名</label><input id="stModel" placeholder="如 gpt-4o-mini">
       <div class="btns"><button class="btn primary" id="stSave">保存</button></div>
     </div>
-    <p class="note">⚠️ API Key 以明文保存在本浏览器 localStorage 中，仅会发往你配置的端点。共用设备请注意风险。端点需支持浏览器跨域（CORS）与流式（stream）输出。</p>
+    <p class="note">⚠️ 源码中不含任何 API Key，Key 只以明文保存在本浏览器的 localStorage 中，且只会发往你配置的端点。请使用 https 端点（http 会让 Key 明文上网），共用设备用完请清空。端点需支持浏览器跨域（CORS）与流式（stream）输出。</p>
     <h2 style="margin-top:20px">数据备份</h2>
     <div style="display:flex;gap:10px;margin-top:4px">
       <button class="btn" id="exportBtn" style="flex:1">导出 JSON</button>
@@ -454,7 +454,9 @@ function seedStore() {
     characters: [c1, c2, c3, c4, c5], scene: [c1.id, c2.id, c3.id, c4.id, c5.id], messages: [],
     sceneState: "", memory: ""
   };
-  store = { v: 1, settings: { apiBase: "https://api.deepseek.com/v1", apiKey: "sk-00363d8684c64740b9ae3e29b40e8378", model: "deepseek-chat" }, currentWorldId: w.id, worlds: {} };
+  // 安全：仓库源码中绝不写入真实 API Key（此文件会公开托管），Key 只能由用户在设置页填写，
+  // 仅保存在本地 localStorage 中。留空时发送前会提示去设置页配置。
+  store = { v: 1, settings: { apiBase: "https://api.deepseek.com/v1", apiKey: "", model: "deepseek-chat" }, currentWorldId: w.id, worlds: {} };
   store.worlds[w.id] = w;
   saveStore();
 }
@@ -1368,6 +1370,17 @@ function deleteChar(id) {
 }
 
 /* ---- 设置 / 导入导出 ---- */
+// 安全：判断端点是否为明文 HTTP（localhost / 127.0.0.1 是本机回环，不经过网络，放行）
+function isInsecureEndpoint(base) {
+  const raw = String(base || "").trim();
+  if (!raw) return false;
+  if (!/^https?:\/\//i.test(raw)) return false; // 留空或省略协议交给浏览器同源处理
+  if (!/^http:\/\//i.test(raw)) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return !(host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]");
+  } catch (e) { return true; }
+}
 function openSettings() {
   $("#stBase").value = store.settings.apiBase || "";
   $("#stKey").value = store.settings.apiKey || "";
@@ -1378,12 +1391,20 @@ function saveSettings() {
   store.settings.apiBase = $("#stBase").value.trim();
   store.settings.apiKey = $("#stKey").value.trim();
   store.settings.model = $("#stModel").value.trim();
+  // 安全：非 HTTPS 端点会让 API Key 以明文经过网络，先警告再由用户决定
+  if (isInsecureEndpoint(store.settings.apiBase) &&
+      !confirm("该端点不是 HTTPS，API Key 会以明文在网络上传输，可能被中途窃取。\n确定仍要使用吗？")) {
+    return;
+  }
   saveStore();
   toast("设置已保存");
   closeOverlay("settingsOverlay");
 }
 function exportJson() {
-  const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+  // 安全：备份文件常被分享/上传，必须剔除 API Key（key 为 "" 时导入端会提示重新配置）
+  const backup = JSON.parse(JSON.stringify(store));
+  if (backup.settings) backup.settings.apiKey = "";
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "cp-rp-backup-" + new Date().toISOString().slice(0, 10) + ".json";
